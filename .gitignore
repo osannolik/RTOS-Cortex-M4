@@ -1,0 +1,5 @@
+!.gitignore
+*.pyc
+*.o
+*.d
+.DS_Store
