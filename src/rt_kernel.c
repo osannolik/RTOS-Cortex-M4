@@ -59,8 +59,6 @@ uint32_t rt_get_tick(void)
   return tick;
 }
 
-
-
 uint32_t * rt_init_stack(void *code, void * const task_parameters, const uint32_t stack_size, volatile void * stack_data)
 {
   uint32_t *stackptr = (uint32_t *) stack_data;
@@ -230,9 +228,6 @@ static uint32_t rt_init_interrupt_prios()
   NVIC_SetPriority(PendSV_IRQn, RT_KERNEL_IRQ_PRIO);    // Set lowest prio
   NVIC_SetPriority(SysTick_IRQn, RT_KERNEL_IRQ_PRIO);
 
-  // Lazy save always
-  //*( ( ( volatile uint32_t * ) 0xe000ef34 ) ) |= ( 0x3UL << 30UL );
-
   return RT_OK;
 }
 
@@ -262,7 +257,6 @@ void rt_start()
   }
 
   current_tcb = (rt_tcb_t *) LIST_MIN_VALUE_REF(&(ready[prio]));
-  //current_tcb->state = EXECUTING;
 
   if (rt_init_interrupt_prios()) {
     // Brace yourselves, the kernel is starting!
@@ -340,8 +334,6 @@ void rt_switch_context()
     :
   );
 }
-
-
 
 void rt_error_handler(uint8_t err)
 {
