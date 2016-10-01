@@ -40,8 +40,10 @@ typedef struct {
 #define LIST_MAX_VALUE_REF(plist) (((list_sorted_t *) plist)->end.prev->reference)
 #define LIST_MIN_VALUE_REF(plist) (((list_sorted_t *) plist)->end.next->reference)
 
-#define LIST_FIRST_REF LIST_MIN_VALUE_REF
-#define LIST_LAST_REF LIST_MAX_VALUE_REF
+#define LIST_FIRST_ITEM LIST_MIN_ITEM
+#define LIST_LAST_ITEM  LIST_MAX_ITEM
+#define LIST_FIRST_REF  LIST_MIN_VALUE_REF
+#define LIST_LAST_REF   LIST_MAX_VALUE_REF
 
 #define LIST_SET_ITERATOR_TO(item) (((list_sorted_t *) ((list_item_t *) item)->list)->iterator = (list_item_t *) item)
 

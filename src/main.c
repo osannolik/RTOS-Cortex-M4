@@ -14,6 +14,8 @@ static void Error_Handler(void);
 DEFINE_TASK(task_1_fcn, task_1, "T1", 1, TASK_STACK_SIZE);
 DEFINE_TASK(task_2_fcn, task_2, "T2", 0, TASK_STACK_SIZE);
 
+rt_sem_t semaphore;
+
 int main(void)
 {
   HAL_Init();
@@ -30,6 +32,8 @@ int main(void)
 
   rt_create_task(&task_1, (void *) &p1);
   rt_create_task(&task_2, (void *) &p2);
+
+  rt_sem_init(&semaphore, 1);
 
   HAL_InitTick(TICK_INT_PRIORITY);
   RT_SYSTICK_ENABLE;
@@ -49,7 +53,13 @@ void task_1_fcn(void *p)
 
   while (1) {
     DBG_LED_RESET;
-    rt_periodic_delay(200);
+    
+    if (rt_sem_take(&semaphore, 100) == RT_OK) {
+      i = 0;
+    } else {
+      i = 1;
+    }
+
     DBG_LED_SET;
 
     for (task_cnt=0; task_cnt<10000; task_cnt++);
@@ -68,7 +78,10 @@ void task_2_fcn(void *p)
   uint8_t i2 = (uint8_t) *((uint8_t *) p);
 
   while (1) {
-    //DBG_LED_RESET;
+
+    rt_periodic_delay(200);
+    rt_sem_give(&semaphore);
+
     korv = korv + 0.01 - 0.1 * broed;
     broed = 1.1 * korv - 0.01;
     i2++;

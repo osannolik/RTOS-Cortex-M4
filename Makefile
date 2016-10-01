@@ -7,10 +7,11 @@
 # Author: osannolik
 
 #### Project ####
+PROJ_NAME = rtos-cm4
 OUTDIR = build
 OBJDIR = $(OUTDIR)/obj
 #OUTFILE = $(OUTDIR)/$(notdir $(shell PWD)).elf
-OUTFILE = $(OUTDIR)/rtk_my.elf
+OUTFILE = $(OUTDIR)/$(PROJ_NAME).elf
 OUTHEX = $(OUTFILE:.elf=.hex)
 OUTBIN = $(OUTFILE:.elf=.bin)
 OUTLIST = $(OUTFILE:.elf=.lst)

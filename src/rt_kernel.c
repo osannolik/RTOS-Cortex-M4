@@ -5,8 +5,6 @@
  *      Author: osannolik
  */
 
-#include "stm32f4xx_hal.h"
-
 #include "rt_kernel.h"
 
 static uint32_t rt_init_interrupt_prios();
@@ -15,22 +13,36 @@ static uint32_t rt_increment_tick();
 static void rt_set_task_ready(rt_task_t const task);
 static void rt_set_task_ready_next(rt_task_t const task);
 static void rt_set_task_delayed(rt_task_t const task, const uint32_t wake_up_tick);
+static void rt_set_task_undelayed(rt_task_t const task);
 
 DEFINE_TASK(rt_idle, idle_task, "IDLE", 0, RT_IDLE_TASK_STACK_SIZE);
 
-static rt_tcb_t * volatile current_tcb = NULL;
+rt_tcb_t * volatile current_tcb = NULL;
 
 static volatile uint32_t tick = 0;
 static volatile uint32_t ticks_in_suspend = 0;
 static volatile uint32_t kernel_suspended = 0;
 static volatile uint32_t next_wakeup_tick = RT_FOREVER_TICK;
+static volatile uint32_t nest_critical = 0;
 
-static volatile list_sorted_t delayed;
-static volatile list_sorted_t ready[RT_PRIO_LEVELS];
+volatile list_sorted_t delayed;
+volatile list_sorted_t ready[RT_PRIO_LEVELS];
 
 void rt_idle(void *p)
 {
   while (1);
+}
+
+void rt_enter_critical(void)
+{
+  rt_mask_irq();
+  ++nest_critical;
+}
+
+void rt_exit_critical(void)
+{
+  if(--nest_critical == 0)
+    rt_unmask_irq();
 }
 
 void rt_suspend(void)
@@ -132,15 +144,122 @@ static void rt_set_task_ready_next(rt_task_t const task)
   list_sorted_iter_insert((list_sorted_t *) &(ready[task_prio]), &(task->list_item));
 }
 
+void rt_yield(void)
+{
+  rt_pend_yield();
+  rt_unmask_irq();
+}
+
 static void rt_set_task_delayed(rt_task_t const task, const uint32_t wake_up_tick)
 {
-  task->list_item.value = wake_up_tick;
-  task->list_item.reference = (void *) task;
-  list_sorted_insert((list_sorted_t *) &delayed, &(task->list_item));
+  rt_enter_critical();
+
+  if (wake_up_tick > tick) {
+    // Remove from ready list and add to delayed list
+    list_sorted_remove(&(task->list_item));
+
+    if (wake_up_tick < next_wakeup_tick)
+      next_wakeup_tick = wake_up_tick;
+
+    task->list_item.value = wake_up_tick;
+    task->list_item.reference = (void *) task;
+    list_sorted_insert((list_sorted_t *) &delayed, &(task->list_item));
+
+    // Trig a task switch
+    rt_yield();
+
+    // irq unmasked when continuing from delayed state here:
+    // Make sure nothing critical is performed after this...
+    rt_mask_irq();
+  }
+
+  rt_exit_critical();
 }
+
+static void rt_set_task_undelayed(rt_task_t const task)
+{
+  // NOTE: Does not set task as Ready!
+
+  if (list_sorted_remove(&(task->list_item)) > 0) {
+    // There are more delayed tasks, so find out when to wake it up
+    next_wakeup_tick = LIST_MIN_VALUE(&delayed);
+  } else {
+    // This was the only task delayed
+    next_wakeup_tick = RT_FOREVER_TICK;
+  }
+}
+
+uint32_t rt_set_current_task_blocked(list_sorted_t *blocked_list, uint32_t ticks_timeout)
+{
+  volatile uint32_t suspend_tick;
+
+  rt_enter_critical();
+
+  // Add currently running task to blocked list
+  current_tcb->blocked_list_item.value = current_tcb->priority;
+  current_tcb->blocked_list_item.reference = (void *) current_tcb;
+  list_sorted_iter_insert(blocked_list, &(current_tcb->blocked_list_item));
+
+  // Suspend task for ticks_timeout ticks
+  suspend_tick = tick;
+  //rt_suspend_task(current_tcb, ticks_timeout);
+
+  rt_set_task_delayed(current_tcb, tick+ticks_timeout);
+
+  rt_exit_critical();
+
+  // When resumed, check if it was due to timeout
+  if (current_tcb->delay_woken_tick >= suspend_tick+ticks_timeout)
+    return RT_NOK;
+  else
+    return RT_OK; // Was unblocked before timeout
+}
+
+void rt_set_task_unblocked(rt_task_t const task)
+{
+  rt_enter_critical();
+
+  list_sorted_remove((list_item_t *) &(task->blocked_list_item));
+  rt_set_task_undelayed(task);
+  rt_set_task_ready_next(task);
+
+  if (task->priority >= current_tcb->priority) {
+    // Trig a task switch
+    rt_yield();
+
+    // irq unmasked when continuing from delayed state here:
+    // Make sure nothing critical is performed after this...
+    rt_mask_irq();
+  }
+
+  rt_exit_critical();
+}
+
+// void rt_suspend_task(rt_task_t const task, const uint32_t ticks)
+// {
+//   rt_mask_irq();
+
+//   if (ticks > 0) {
+
+//     rt_set_task_delayed(task, tick + ticks);
+
+//     rt_pend_yield();
+//   }
+
+//   rt_unmask_irq();
+// }
+
 
 void rt_periodic_delay(const uint32_t period)
 {
+  uint32_t task_nominal_wakeup_tick = current_tcb->delay_woken_tick + period;
+
+  rt_mask_irq();
+
+  rt_set_task_delayed(current_tcb, task_nominal_wakeup_tick);
+
+  rt_unmask_irq();
+  /*
   uint32_t task_wakeup_tick;
 
   rt_mask_irq();
@@ -159,6 +278,7 @@ void rt_periodic_delay(const uint32_t period)
   rt_pend_yield();
 
   rt_unmask_irq();
+  */
 }
 
 static uint32_t rt_increment_tick()
@@ -174,17 +294,21 @@ static uint32_t rt_increment_tick()
 
   ++tick;
 
+  // TODO: Handle Blocked tasks timeout
+
   if (tick >= next_wakeup_tick) {
     // Wake up a delayed task
     woken_task = (rt_task_t) LIST_FIRST_REF(&delayed);
     
-    if (list_sorted_remove(&(woken_task->list_item)) > 0) {
-      // There are more delayed tasks, so find out when to wake it up
-      next_wakeup_tick = LIST_MIN_VALUE(&delayed);
-    } else {
-      // This was the only task delayed
-      next_wakeup_tick = RT_FOREVER_TICK;
-    }
+    rt_set_task_undelayed(woken_task);
+
+    // if (list_sorted_remove(&(woken_task->list_item)) > 0) {
+    //   // There are more delayed tasks, so find out when to wake it up
+    //   next_wakeup_tick = LIST_MIN_VALUE(&delayed);
+    // } else {
+    //   // This was the only task delayed
+    //   next_wakeup_tick = RT_FOREVER_TICK;
+    // }
 
     woken_task->delay_woken_tick = tick;
 
@@ -194,6 +318,7 @@ static uint32_t rt_increment_tick()
       rt_set_task_ready_next(woken_task);
       return RT_OK;
     } else {
+      // Set it as ready but don't switch to it immediately
       rt_set_task_ready(woken_task);
       return RT_NOK;
     }
@@ -262,9 +387,8 @@ void rt_start()
     // Brace yourselves, the kernel is starting!
     rt_unmask_irq();
     rt_enable_irq();
-    __asm volatile (
-      " svc 0             \n\t" // Need to be in handler mode to restore correctly => system call
-    );
+
+    __asm volatile (" svc 0 " );  // Need to be in handler mode to restore correctly => system call
   }
 
 }
@@ -289,7 +413,7 @@ void rt_systick()
 
   rt_mask_irq();
 
-  if (RT_OK==rt_increment_tick())
+  if (RT_OK==rt_increment_tick()) 
     rt_pend_yield();
   
   rt_unmask_irq();
