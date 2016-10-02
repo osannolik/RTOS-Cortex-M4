@@ -11,8 +11,9 @@ static void Error_Handler(void);
 
 #define TASK_STACK_SIZE 512  
 
-DEFINE_TASK(task_1_fcn, task_1, "T1", 1, TASK_STACK_SIZE);
-DEFINE_TASK(task_2_fcn, task_2, "T2", 0, TASK_STACK_SIZE);
+DEFINE_TASK(task_1_fcn, task_1, "T1", 3, TASK_STACK_SIZE);
+DEFINE_TASK(task_2_fcn, task_2, "T2", 2, TASK_STACK_SIZE);
+DEFINE_TASK(task_3_fcn, task_3, "T3", 1, TASK_STACK_SIZE);
 
 rt_sem_t semaphore;
 
@@ -32,6 +33,7 @@ int main(void)
 
   rt_create_task(&task_1, (void *) &p1);
   rt_create_task(&task_2, (void *) &p2);
+  rt_create_task(&task_3, (void *) &p2);
 
   rt_sem_init(&semaphore, 1);
 
@@ -49,50 +51,53 @@ int main(void)
 void task_1_fcn(void *p)
 {
   uint32_t task_cnt = 0;
-  uint8_t i = (uint8_t) *((uint8_t *) p);
 
   while (1) {
-    DBG_LED_RESET;
-    
-    if (rt_sem_take(&semaphore, 100) == RT_OK) {
-      i = 0;
-    } else {
-      i = 1;
-    }
 
-    DBG_LED_SET;
+    DBG_PAD1_RESET;
+
+    rt_periodic_delay(5);
+
+    DBG_PAD1_SET;
 
     for (task_cnt=0; task_cnt<10000; task_cnt++);
-    i++;
 
-    // rt_suspend();
-    // HAL_Delay(500);
-    // rt_resume();
   }
 }
 
 void task_2_fcn(void *p)
 {
-  float korv = 0.0;
-  float broed = 1.0;
-  uint8_t i2 = (uint8_t) *((uint8_t *) p);
+  uint32_t task_cnt = 0;
 
   while (1) {
 
-    rt_periodic_delay(200);
-    rt_sem_give(&semaphore);
+    DBG_PAD2_RESET;
 
-    korv = korv + 0.01 - 0.1 * broed;
-    broed = 1.1 * korv - 0.01;
-    i2++;
+    rt_periodic_delay(10);
 
-    // rt_suspend();
-    // HAL_Delay(500);
-    // rt_resume();
+    DBG_PAD2_SET;
+
+    for (task_cnt=0; task_cnt<10000; task_cnt++);
+
   }
 }
 
+void task_3_fcn(void *p)
+{
+  uint32_t task_cnt = 0;
 
+  while (1) {
+
+    DBG_PAD3_RESET;
+
+    rt_periodic_delay(50);
+
+    DBG_PAD3_SET;
+
+    for (task_cnt=0; task_cnt<10000; task_cnt++);
+
+  }
+}
 
 /**
   * @brief  System Clock Configuration

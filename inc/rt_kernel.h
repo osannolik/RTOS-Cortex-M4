@@ -77,16 +77,13 @@ void rt_syscall()        __attribute__((naked));
 void rt_yield(void);
 uint32_t rt_set_current_task_blocked(list_sorted_t *blocked_list, uint32_t ticks_timeout);
 void rt_set_task_unblocked(rt_task_t const task);
-void rt_suspend_task(rt_task_t const task, const uint32_t ticks);
 void rt_enter_critical(void);
 void rt_exit_critical(void);
 void rt_suspend(void);
 void rt_resume(void);
 uint32_t rt_get_tick(void);
 void rt_periodic_delay(const uint32_t period);
-uint32_t * rt_init_stack(void *code, void * const task_parameters, const uint32_t stack_size, volatile void * stack_data);
 uint32_t rt_create_task(rt_task_t const task, void * const task_parameters);
-void rt_switch_task();
 void rt_start();
 uint32_t rt_init();
 

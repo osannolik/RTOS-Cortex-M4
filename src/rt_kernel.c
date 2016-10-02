@@ -8,12 +8,15 @@
 #include "rt_kernel.h"
 
 static uint32_t rt_init_interrupt_prios();
+static uint32_t * rt_init_stack(void *code, void * const task_parameters, const uint32_t stack_size, volatile void * stack_data);
 static void rt_error_handler(uint8_t err);
 static uint32_t rt_increment_tick();
 static void rt_set_task_ready(rt_task_t const task);
 static void rt_set_task_ready_next(rt_task_t const task);
 static void rt_set_task_delayed(rt_task_t const task, const uint32_t wake_up_tick);
 static void rt_set_task_undelayed(rt_task_t const task);
+
+void rt_switch_task();
 
 DEFINE_TASK(rt_idle, idle_task, "IDLE", 0, RT_IDLE_TASK_STACK_SIZE);
 
@@ -71,7 +74,7 @@ uint32_t rt_get_tick(void)
   return tick;
 }
 
-uint32_t * rt_init_stack(void *code, void * const task_parameters, const uint32_t stack_size, volatile void * stack_data)
+static uint32_t * rt_init_stack(void *code, void * const task_parameters, const uint32_t stack_size, volatile void * stack_data)
 {
   uint32_t *stackptr = (uint32_t *) stack_data;
   stackptr = (uint32_t*) &stackptr[stack_size-1];
@@ -158,12 +161,27 @@ static void rt_set_task_delayed(rt_task_t const task, const uint32_t wake_up_tic
     // Remove from ready list and add to delayed list
     list_sorted_remove(&(task->list_item));
 
-    if (wake_up_tick < next_wakeup_tick)
-      next_wakeup_tick = wake_up_tick;
+    //if (wake_up_tick < next_wakeup_tick)
+    //  next_wakeup_tick = wake_up_tick;
 
     task->list_item.value = wake_up_tick;
     task->list_item.reference = (void *) task;
     list_sorted_insert((list_sorted_t *) &delayed, &(task->list_item));
+
+
+
+    // insert_at = task->list_item;
+
+    // while (insert_at->prev != delayed.end && insert_at->prev->reference->prio <= task->prio)
+    //   insert_at = insert_at->prev;
+
+    // list_sorted_remove(&(task->list_item));
+
+
+
+
+
+    next_wakeup_tick = LIST_MIN_VALUE(&delayed);
 
     // Trig a task switch
     rt_yield();
@@ -202,7 +220,6 @@ uint32_t rt_set_current_task_blocked(list_sorted_t *blocked_list, uint32_t ticks
 
   // Suspend task for ticks_timeout ticks
   suspend_tick = tick;
-  //rt_suspend_task(current_tcb, ticks_timeout);
 
   rt_set_task_delayed(current_tcb, tick+ticks_timeout);
 
@@ -235,21 +252,6 @@ void rt_set_task_unblocked(rt_task_t const task)
   rt_exit_critical();
 }
 
-// void rt_suspend_task(rt_task_t const task, const uint32_t ticks)
-// {
-//   rt_mask_irq();
-
-//   if (ticks > 0) {
-
-//     rt_set_task_delayed(task, tick + ticks);
-
-//     rt_pend_yield();
-//   }
-
-//   rt_unmask_irq();
-// }
-
-
 void rt_periodic_delay(const uint32_t period)
 {
   uint32_t task_nominal_wakeup_tick = current_tcb->delay_woken_tick + period;
@@ -259,26 +261,6 @@ void rt_periodic_delay(const uint32_t period)
   rt_set_task_delayed(current_tcb, task_nominal_wakeup_tick);
 
   rt_unmask_irq();
-  /*
-  uint32_t task_wakeup_tick;
-
-  rt_mask_irq();
-
-  task_wakeup_tick = current_tcb->delay_woken_tick + period;
-
-  if (task_wakeup_tick < next_wakeup_tick)
-    next_wakeup_tick = task_wakeup_tick;
-
-  if (next_wakeup_tick > tick) {
-    // Remove from ready list and add to delayed list
-    list_sorted_remove(&(current_tcb->list_item));
-    rt_set_task_delayed(current_tcb, task_wakeup_tick);
-  }
-
-  rt_pend_yield();
-
-  rt_unmask_irq();
-  */
 }
 
 static uint32_t rt_increment_tick()
@@ -294,21 +276,11 @@ static uint32_t rt_increment_tick()
 
   ++tick;
 
-  // TODO: Handle Blocked tasks timeout
-
   if (tick >= next_wakeup_tick) {
     // Wake up a delayed task
     woken_task = (rt_task_t) LIST_FIRST_REF(&delayed);
     
     rt_set_task_undelayed(woken_task);
-
-    // if (list_sorted_remove(&(woken_task->list_item)) > 0) {
-    //   // There are more delayed tasks, so find out when to wake it up
-    //   next_wakeup_tick = LIST_MIN_VALUE(&delayed);
-    // } else {
-    //   // This was the only task delayed
-    //   next_wakeup_tick = RT_FOREVER_TICK;
-    // }
 
     woken_task->delay_woken_tick = tick;
 
