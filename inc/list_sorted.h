@@ -11,7 +11,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define LIST_VALUE_DEPTH (2)
+
 struct item {
+  //uint32_t value[LIST_VALUE_DEPTH];
   uint32_t value;
   void *reference;
   void *list;
@@ -51,6 +54,7 @@ void list_sorted_init(list_sorted_t *list);
 list_item_t *list_sorted_next_item(list_item_t *item);
 list_item_t *list_sorted_get_iter_item(list_sorted_t *list);
 void *list_sorted_get_iter_ref(list_sorted_t *list);
+// uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item, uint8_t depth);
 uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item);
 uint32_t list_sorted_iter_insert(list_sorted_t *list, list_item_t *item);
 uint32_t list_sorted_remove(list_item_t *item);

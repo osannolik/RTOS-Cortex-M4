@@ -17,6 +17,16 @@ DEFINE_TASK(task_3_fcn, task_3, "T3", 1, TASK_STACK_SIZE);
 
 rt_sem_t semaphore;
 
+// list_sorted_t test_list;
+// list_item_t item_00 = {{0, 0}, NULL, NULL, NULL, NULL};
+// list_item_t item_10 = {{1, 0}, NULL, NULL, NULL, NULL};
+// list_item_t item_20 = {{2, 0}, NULL, NULL, NULL, NULL};
+// list_item_t item_30 = {{3, 0}, NULL, NULL, NULL, NULL};
+// list_item_t item_41 = {{4, 1}, NULL, NULL, NULL, NULL};
+// list_item_t item_03 = {{0, 3}, NULL, NULL, NULL, NULL};
+// list_item_t item_12 = {{1, 2}, NULL, NULL, NULL, NULL};
+// list_item_t item_21 = {{2, 1}, NULL, NULL, NULL, NULL};
+// list_item_t item_21_2 = {{2, 1}, NULL, NULL, NULL, NULL};
 int main(void)
 {
   HAL_Init();
@@ -27,6 +37,23 @@ int main(void)
   debug_init();
 
   rt_init();
+
+
+  // list_sorted_init(&test_list);
+
+  // list_sorted_insert(&test_list, &item_20, 2);
+  // list_sorted_insert(&test_list, &item_12, 2);
+  // list_sorted_insert(&test_list, &item_30, 2);
+
+  // // List is 12, 20, 30
+
+  // list_sorted_insert(&test_list, &item_21, 2);
+  // list_sorted_insert(&test_list, &item_10, 2);
+
+  // // List is 10, 12, 20, 21, 30
+
+  // list_sorted_insert(&test_list, &item_21_2, 2);
+
 
   uint8_t p1 = 0x22;
   uint8_t p2 = 0x33;
@@ -56,11 +83,11 @@ void task_1_fcn(void *p)
 
     DBG_PAD1_RESET;
 
-    rt_periodic_delay(5);
+    rt_sem_take(&semaphore, 10);
 
     DBG_PAD1_SET;
 
-    for (task_cnt=0; task_cnt<10000; task_cnt++);
+    for (task_cnt=0; task_cnt<5000; task_cnt++);
 
   }
 }
@@ -73,7 +100,9 @@ void task_2_fcn(void *p)
 
     DBG_PAD2_RESET;
 
-    rt_periodic_delay(10);
+    rt_periodic_delay(5);
+
+    rt_sem_give(&semaphore);
 
     DBG_PAD2_SET;
 
@@ -81,6 +110,40 @@ void task_2_fcn(void *p)
 
   }
 }
+
+// void task_1_fcn(void *p)
+// {
+//   uint32_t task_cnt = 0;
+
+//   while (1) {
+
+//     DBG_PAD1_RESET;
+
+//     rt_periodic_delay(1);
+
+//     DBG_PAD1_SET;
+
+//     for (task_cnt=0; task_cnt<10000; task_cnt++);
+
+//   }
+// }
+
+// void task_2_fcn(void *p)
+// {
+//   uint32_t task_cnt = 0;
+
+//   while (1) {
+
+//     DBG_PAD2_RESET;
+
+//     rt_periodic_delay(8);
+
+//     DBG_PAD2_SET;
+
+//     for (task_cnt=0; task_cnt<10000; task_cnt++);
+
+//   }
+// }
 
 void task_3_fcn(void *p)
 {

@@ -10,6 +10,8 @@
 void list_sorted_init(list_sorted_t *list)
 {
   list->len = 0;
+  // list->end.value[0] = LIST_END_VALUE;
+  // list->end.value[1] = LIST_END_VALUE;
   list->end.value = LIST_END_VALUE;
   list->end.list = list;
   list->end.prev = &(list->end);
@@ -75,6 +77,58 @@ uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item)
 
   return ++(list->len);
 }
+
+// uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item, uint8_t depth)
+// {
+//   list_item_t *insert_at = list->end.next;
+//   list_item_t *start_at = &(list->end);
+//   list_item_t *end_at = &(list->end);
+
+//   uint32_t input_value = item->value[0];
+
+//   item->list = list;
+
+//   uint8_t i;
+//   for (i=0; i<depth; i++) {
+//     input_value = item->value[i];
+
+//     insert_at = start_at;
+
+//     if (input_value == LIST_END_VALUE) {
+//       insert_at = list->end.prev;
+//     } else {
+//         while (1) {
+          
+//           if (insert_at->value[i] < insert_at->next->value[i])
+//             start_at = insert_at->prev;
+
+//           if (insert_at->next->value[i] > input_value) {
+//             end_at = insert_at->next;
+//             break;
+//           }
+
+//           if (insert_at->next == end_at)
+//             break;
+
+//           insert_at = insert_at->next;
+//         }
+//     }
+
+//     if (input_value != insert_at->value[i])
+//       break;
+//   }
+
+//   insert_at->next->prev = item;
+//   item->next = insert_at->next;
+//   item->prev = insert_at;
+//   insert_at->next = item;
+
+//   if (list->len == 0)
+//     list->iterator = item;
+
+//   return ++(list->len);
+// }
+
 
 uint32_t list_sorted_iter_insert(list_sorted_t *list, list_item_t *item)
 {

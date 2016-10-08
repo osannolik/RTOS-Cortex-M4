@@ -12,7 +12,7 @@
 #include <stdint.h>
 
 #include "list_sorted.h"
-#include "rt_kernel.h"
+
 
 typedef struct {
   volatile uint32_t counter;

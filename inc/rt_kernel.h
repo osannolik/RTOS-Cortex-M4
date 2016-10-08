@@ -75,8 +75,7 @@ void rt_switch_context() __attribute__((naked));
 void rt_syscall()        __attribute__((naked));
 
 void rt_yield(void);
-uint32_t rt_set_current_task_blocked(list_sorted_t *blocked_list, uint32_t ticks_timeout);
-void rt_set_task_unblocked(rt_task_t const task);
+
 void rt_enter_critical(void);
 void rt_exit_critical(void);
 void rt_suspend(void);
