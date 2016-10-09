@@ -1,17 +1,106 @@
 /*
- * list_sorted.c
+ * rt_lists.c
  *
- *  Created on: 17 sep 2016
+ *  Created on: 2 oct 2016
  *      Author: osannolik
  */
 
-#include "list_sorted.h"
+#include "rt_lists.h"
+
+static volatile list_sorted_t delayed[RT_PRIO_LEVELS];
+volatile list_sorted_t ready[RT_PRIO_LEVELS];
+
+static void update_next_wakeup(void);
+
+static void update_next_wakeup(void)
+{
+  uint32_t prio, wake_up_tick, minimum_wake_up_tick = RT_FOREVER_TICK;
+  list_sorted_t *delayed_list;
+  rt_task_t wake_up_task = NULL;
+
+  for (prio=0; prio<RT_PRIO_LEVELS; prio++) {
+    delayed_list = (list_sorted_t *) &(delayed[prio]);
+    if (LIST_LENGTH(delayed_list)>0) {
+      wake_up_tick = LIST_MIN_VALUE(delayed_list);
+      if (wake_up_tick <= minimum_wake_up_tick) {
+        minimum_wake_up_tick = wake_up_tick;
+        wake_up_task = (rt_task_t) LIST_MIN_VALUE_REF(delayed_list);
+      }
+    }
+  }
+
+  if (wake_up_task != NULL) {
+    next_wakeup_task = wake_up_task;
+    next_wakeup_tick = minimum_wake_up_tick;
+  }
+}
+
+void rt_lists_ready_init(void)
+{
+  uint8_t prio;
+
+  for (prio=0; prio<RT_PRIO_LEVELS; prio++)
+    list_sorted_init((list_sorted_t *) &(ready[prio]));
+}
+
+void rt_lists_delayed_init(void)
+{
+  uint8_t prio;
+
+  for (prio=0; prio<RT_PRIO_LEVELS; prio++)
+    list_sorted_init((list_sorted_t *) &(delayed[prio]));
+}
+
+void rt_list_task_ready(rt_task_t const task)
+{
+  uint32_t task_prio = task->priority;
+
+  task->list_item.value = task_prio;
+  list_sorted_insert((list_sorted_t *) &(ready[task_prio]), &(task->list_item));
+}
+
+void rt_list_task_ready_next(rt_task_t const task)
+{
+  rt_enter_critical();
+
+  uint32_t task_prio = task->priority;
+  list_item_t *list_item = &(task->list_item);
+
+  list_item->value = task_prio;
+  list_sorted_iter_insert((list_sorted_t *) &(ready[task_prio]), list_item);
+
+  rt_exit_critical();
+}
+
+void rt_list_task_delayed(rt_task_t const task, const uint32_t wake_up_tick)
+{
+  list_sorted_t *delayed_list = (list_sorted_t *) &(delayed[task->priority]);
+  list_item_t *list_item = &(task->list_item);
+
+  if (wake_up_tick > rt_get_tick()) {
+    // Remove from ready list and add to delayed list
+    list_sorted_remove(list_item);
+
+    list_item->value = wake_up_tick;
+    list_sorted_insert(delayed_list, list_item);
+
+    update_next_wakeup();
+
+    // Trig a task switch
+    rt_pend_yield();
+  }
+}
+
+void rt_list_task_undelayed(rt_task_t const task)
+{
+  // NOTE: Does not set task as Ready!
+  list_sorted_remove(&(task->list_item));
+  update_next_wakeup();
+}
 
 void list_sorted_init(list_sorted_t *list)
 {
   list->len = 0;
-  // list->end.value[0] = LIST_END_VALUE;
-  // list->end.value[1] = LIST_END_VALUE;
   list->end.value = LIST_END_VALUE;
   list->end.list = list;
   list->end.prev = &(list->end);
@@ -78,58 +167,6 @@ uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item)
   return ++(list->len);
 }
 
-// uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item, uint8_t depth)
-// {
-//   list_item_t *insert_at = list->end.next;
-//   list_item_t *start_at = &(list->end);
-//   list_item_t *end_at = &(list->end);
-
-//   uint32_t input_value = item->value[0];
-
-//   item->list = list;
-
-//   uint8_t i;
-//   for (i=0; i<depth; i++) {
-//     input_value = item->value[i];
-
-//     insert_at = start_at;
-
-//     if (input_value == LIST_END_VALUE) {
-//       insert_at = list->end.prev;
-//     } else {
-//         while (1) {
-          
-//           if (insert_at->value[i] < insert_at->next->value[i])
-//             start_at = insert_at->prev;
-
-//           if (insert_at->next->value[i] > input_value) {
-//             end_at = insert_at->next;
-//             break;
-//           }
-
-//           if (insert_at->next == end_at)
-//             break;
-
-//           insert_at = insert_at->next;
-//         }
-//     }
-
-//     if (input_value != insert_at->value[i])
-//       break;
-//   }
-
-//   insert_at->next->prev = item;
-//   item->next = insert_at->next;
-//   item->prev = insert_at;
-//   insert_at->next = item;
-
-//   if (list->len == 0)
-//     list->iterator = item;
-
-//   return ++(list->len);
-// }
-
-
 uint32_t list_sorted_iter_insert(list_sorted_t *list, list_item_t *item)
 {
   // Insert the item to where the iterator points
@@ -150,7 +187,6 @@ uint32_t list_sorted_iter_insert(list_sorted_t *list, list_item_t *item)
 
     return ++(list->len);
   }
-
 }
 
 uint32_t list_sorted_remove(list_item_t *item)

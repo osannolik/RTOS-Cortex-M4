@@ -2,6 +2,7 @@
 #include "main.h"
 
 #include "rt_kernel.h"
+#include "rt_sem.h"
 
 static void SystemClock_Config(void);
 static void Error_Handler(void);
@@ -13,20 +14,10 @@ static void Error_Handler(void);
 
 DEFINE_TASK(task_1_fcn, task_1, "T1", 3, TASK_STACK_SIZE);
 DEFINE_TASK(task_2_fcn, task_2, "T2", 2, TASK_STACK_SIZE);
-DEFINE_TASK(task_3_fcn, task_3, "T3", 1, TASK_STACK_SIZE);
+DEFINE_TASK(task_3_fcn, task_3, "T3", 2, TASK_STACK_SIZE);
 
 rt_sem_t semaphore;
 
-// list_sorted_t test_list;
-// list_item_t item_00 = {{0, 0}, NULL, NULL, NULL, NULL};
-// list_item_t item_10 = {{1, 0}, NULL, NULL, NULL, NULL};
-// list_item_t item_20 = {{2, 0}, NULL, NULL, NULL, NULL};
-// list_item_t item_30 = {{3, 0}, NULL, NULL, NULL, NULL};
-// list_item_t item_41 = {{4, 1}, NULL, NULL, NULL, NULL};
-// list_item_t item_03 = {{0, 3}, NULL, NULL, NULL, NULL};
-// list_item_t item_12 = {{1, 2}, NULL, NULL, NULL, NULL};
-// list_item_t item_21 = {{2, 1}, NULL, NULL, NULL, NULL};
-// list_item_t item_21_2 = {{2, 1}, NULL, NULL, NULL, NULL};
 int main(void)
 {
   HAL_Init();
@@ -37,23 +28,6 @@ int main(void)
   debug_init();
 
   rt_init();
-
-
-  // list_sorted_init(&test_list);
-
-  // list_sorted_insert(&test_list, &item_20, 2);
-  // list_sorted_insert(&test_list, &item_12, 2);
-  // list_sorted_insert(&test_list, &item_30, 2);
-
-  // // List is 12, 20, 30
-
-  // list_sorted_insert(&test_list, &item_21, 2);
-  // list_sorted_insert(&test_list, &item_10, 2);
-
-  // // List is 10, 12, 20, 21, 30
-
-  // list_sorted_insert(&test_list, &item_21_2, 2);
-
 
   uint8_t p1 = 0x22;
   uint8_t p2 = 0x33;
@@ -68,22 +42,24 @@ int main(void)
   RT_SYSTICK_ENABLE;
   rt_start();
 
-  float xf = 1.0;
-  while(1) {
-    xf = 1.1 * xf;
-    xf = xf - 10.0;
-  }
+  while(1);
+
+  return 0;
 }
 
 void task_1_fcn(void *p)
 {
   uint32_t task_cnt = 0;
+  uint8_t timed_out = 0;
 
   while (1) {
 
     DBG_PAD1_RESET;
 
-    rt_sem_take(&semaphore, 10);
+    if (rt_sem_take(&semaphore, 10) == RT_NOK)
+      timed_out = 1;
+    else
+      timed_out = 0;
 
     DBG_PAD1_SET;
 
@@ -95,6 +71,7 @@ void task_1_fcn(void *p)
 void task_2_fcn(void *p)
 {
   uint32_t task_cnt = 0;
+  uint8_t  task_unblocked = 0;
 
   while (1) {
 
@@ -102,7 +79,10 @@ void task_2_fcn(void *p)
 
     rt_periodic_delay(5);
 
-    rt_sem_give(&semaphore);
+    if (rt_sem_give(&semaphore) == RT_OK)
+      task_unblocked = 1;
+    else
+      task_unblocked = 0;
 
     DBG_PAD2_SET;
 

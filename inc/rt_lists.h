@@ -1,33 +1,19 @@
 /*
- * list_sorted.h
+ * rt_lists.h
  *
- *  Created on: 17 sep 2016
+ *  Created on: 2 oct 2016
  *      Author: osannolik
  */
 
-#ifndef LIST_SORTED_H_
-#define LIST_SORTED_H_
+#ifndef RT_LISTS_H_
+#define RT_LISTS_H_
 
 #include <stddef.h>
 #include <stdint.h>
 
-#define LIST_VALUE_DEPTH (2)
+#include "rt_kernel.h"
 
-struct item {
-  //uint32_t value[LIST_VALUE_DEPTH];
-  uint32_t value;
-  void *reference;
-  void *list;
-  struct item *prev;
-  struct item *next;
-};
-typedef struct item list_item_t;
 
-typedef struct {
-  uint32_t len;
-  list_item_t end;
-  list_item_t *iterator;
-} list_sorted_t;
 
 #define LIST_ITEM_INIT {0, NULL, NULL, NULL, NULL}
 #define LIST_INIT {0, LIST_ITEM_INIT, NULL}
@@ -54,9 +40,19 @@ void list_sorted_init(list_sorted_t *list);
 list_item_t *list_sorted_next_item(list_item_t *item);
 list_item_t *list_sorted_get_iter_item(list_sorted_t *list);
 void *list_sorted_get_iter_ref(list_sorted_t *list);
-// uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item, uint8_t depth);
 uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item);
 uint32_t list_sorted_iter_insert(list_sorted_t *list, list_item_t *item);
 uint32_t list_sorted_remove(list_item_t *item);
 
-#endif /* LIST_SORTED_H_ */
+void rt_lists_ready_init(void);
+void rt_lists_delayed_init(void);
+
+void rt_list_task_ready(rt_task_t const task);
+void rt_list_task_ready_next(rt_task_t const task);
+
+void rt_list_task_delayed(rt_task_t const task, const uint32_t wake_up_tick);
+void rt_list_task_undelayed(rt_task_t const task);
+
+extern volatile list_sorted_t ready[RT_PRIO_LEVELS];
+
+#endif /* RT_LISTS_H_ */

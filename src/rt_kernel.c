@@ -6,7 +6,6 @@
  */
 
 #include "rt_kernel.h"
-#include "rt_lists.h"
 
 #include "debug.h"
 
@@ -20,7 +19,7 @@ void rt_switch_task();
 
 DEFINE_TASK(rt_idle, idle_task, "IDLE", 0, RT_IDLE_TASK_STACK_SIZE);
 
-rt_tcb_t * volatile current_tcb = NULL;
+rt_task_t volatile current_task = NULL;
 
 volatile uint32_t tick = 0;
 static volatile uint32_t ticks_in_suspend = 0;
@@ -28,10 +27,6 @@ static volatile uint32_t kernel_suspended = 0;
 volatile uint32_t next_wakeup_tick = RT_FOREVER_TICK;
 rt_task_t volatile next_wakeup_task = NULL;
 static volatile uint32_t nest_critical = 0;
-
-extern list_sorted_t delayed[RT_PRIO_LEVELS];
-extern list_sorted_t ready[RT_PRIO_LEVELS];
-
 
 void rt_idle(void *p)
 {
@@ -117,8 +112,10 @@ uint32_t rt_create_task(rt_task_t const task, void * const task_parameters)
 
   task->state = UNINITIALIZED;
 
-  if (prio >= RT_PRIO_LEVELS)
-    return RT_NOK;
+  if (prio >= RT_PRIO_LEVELS) {
+    task->priority = RT_PRIO_LEVELS - 1;
+    task->base_prio = RT_PRIO_LEVELS - 1;
+  }
 
   task->sp = rt_init_stack(task->code_start, task_parameters, task->stack_size, task->sp);
 
@@ -147,9 +144,9 @@ void rt_periodic_delay(const uint32_t period)
   // if there are other tasks of higher prio...
   rt_enter_critical();
 
-  uint32_t task_nominal_wakeup_tick = current_tcb->delay_woken_tick + period;
+  uint32_t task_nominal_wakeup_tick = current_task->delay_woken_tick + period;
 
-  rt_list_task_delayed(current_tcb, task_nominal_wakeup_tick);
+  rt_list_task_delayed(current_task, task_nominal_wakeup_tick);
 
   rt_exit_critical();
 }
@@ -180,12 +177,12 @@ static uint32_t rt_increment_tick()
     rt_list_task_ready_next(woken_task);
 
     // Only trig a switch if the woken task has high enough prio
-    if (woken_task->priority >= current_tcb->priority)
+    if (woken_task->priority >= current_task->priority)
       do_context_switch = 1;
   }
 
   // If there are other tasks with the same prio as the current, let them get some cpu time
-  if (do_context_switch || LIST_LENGTH(&(ready[current_tcb->priority])) > 1)
+  if (do_context_switch || LIST_LENGTH(&(ready[current_task->priority])) > 1)
     return RT_OK;
   else
     return RT_NOK;
@@ -203,7 +200,7 @@ void rt_switch_task()
   // TODO: Check if there actually are any ready tasks?
 
   // Get the next reference in the ready list
-  current_tcb = (rt_tcb_t *) list_sorted_get_iter_ref((list_sorted_t *) &(ready[prio]));
+  current_task = (rt_task_t) list_sorted_get_iter_ref((list_sorted_t *) &(ready[prio]));
 
   DBG_PAD4_RESET;
 
@@ -241,7 +238,7 @@ void rt_start()
       rt_error_handler(RT_ERR_STARTFAILURE); // Found no ready tasks
   }
 
-  current_tcb = (rt_tcb_t *) LIST_MIN_VALUE_REF(&(ready[prio]));
+  current_task = (rt_task_t) LIST_MIN_VALUE_REF(&(ready[prio]));
 
   if (rt_init_interrupt_prios()) {
     // Brace yourselves, the kernel is starting!
@@ -262,7 +259,7 @@ void rt_syscall()
     " isb                       \n\t"
     " bx lr                     \n\t"
     : 
-    : [SP] "r" (&(current_tcb->sp))
+    : [SP] "r" (&(current_task->sp))
     : 
   );
 }
@@ -296,11 +293,11 @@ void rt_switch_context()
     " bl rt_switch_task         \n\t" // Possibly change context to next process
     "                           \n\t"
     :
-    : [SP] "r" (&(current_tcb->sp))
+    : [SP] "r" (&(current_task->sp))
     :
   );
 
-  // Split inline assembly to force re-evaluation of current_tcb (updated by context switcher)
+  // Split inline assembly to force re-evaluation of current_task (updated by context switcher)
 
   __asm volatile (
     " ldr r0, [%[SP]]           \n\t" // Get stack-pointer from tcb
@@ -314,7 +311,7 @@ void rt_switch_context()
     " isb                       \n\t"
     " bx lr                     \n\t" // Continue next task
     :
-    : [SP] "r" (&(current_tcb->sp))
+    : [SP] "r" (&(current_task->sp))
     :
   );
 }

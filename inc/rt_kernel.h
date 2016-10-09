@@ -11,10 +11,9 @@
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 
-#include "list_sorted.h"
-#include "rt_sem.h"
+#include "rt_kernel_defs.h"
+#include "rt_lists.h"
 
-#define ALWAYS_INLINE inline __attribute__((always_inline))
 
 #define rt_systick              SysTick_Handler
 #define rt_switch_context       PendSV_Handler
@@ -22,53 +21,15 @@
 //#define rt_enter_critical       rt_mask_irq
 //#define rt_exit_critical        rt_unmask_irq
 
-#define RT_KERNEL_IRQ_PRIO      (0x0F)
-#define RT_MASK_IRQ_PRIO        (0x06<<4)
-#define RT_IDLE_TASK_STACK_SIZE (512)
-#define RT_PRIO_LEVELS          (4)
 
-#define RT_FOREVER_TICK         (0xFFFFFFFF)
+
+#define TCB_INIT(sp, fcn, name, prio, stack_size) {sp, fcn, name, prio, prio, UNINITIALIZED, stack_size, 0, LIST_ITEM_INIT, LIST_ITEM_INIT}
 
 #define DEFINE_TASK(fcn, handle, name, prio, stack_size) \
   void fcn(void *p);\
   uint32_t handle ## _stack[stack_size];\
   rt_tcb_t handle = TCB_INIT(handle ## _stack, fcn, name, prio, stack_size);
 
-
-enum {
-  UNINITIALIZED = 'U',
-  READY         = 'R',
-  EXECUTING     = 'X',
-  DELAYED       = 'D',
-  BLOCKED       = 'B'
-};
-
-enum {
-  RT_NOK = 0,
-  RT_OK
-};
-
-enum {
-  RT_ERR_STARTFAILURE = 0
-};
-
-typedef struct {
-  volatile void *sp;
-  void *code_start;
-  const char *task_name;
-  uint32_t priority;
-  uint32_t base_prio;
-  volatile char state;
-  uint32_t stack_size;
-  uint32_t delay_woken_tick;
-  list_item_t list_item;
-  list_item_t blocked_list_item;
-} rt_tcb_t;
-
-#define TCB_INIT(sp, fcn, name, prio, stack_size) {sp, fcn, name, prio, prio, UNINITIALIZED, stack_size, 0, LIST_ITEM_INIT, LIST_ITEM_INIT}
-
-typedef uint8_t rt_status_t;
-typedef rt_tcb_t* rt_task_t;
 
 void rt_systick();
 void rt_switch_context() __attribute__((naked));
@@ -133,5 +94,9 @@ ALWAYS_INLINE static void rt_unmask_irq(void)
     : "r" (tmp)
   );
 }
+
+extern rt_task_t volatile current_task;
+extern volatile uint32_t next_wakeup_tick;
+extern rt_task_t volatile next_wakeup_task;
 
 #endif /* RT_KERNEL_H_ */
