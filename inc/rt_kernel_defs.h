@@ -11,19 +11,11 @@
 #define ALWAYS_INLINE inline __attribute__((always_inline))
 
 #define RT_KERNEL_IRQ_PRIO      (0x0F)
-#define RT_MASK_IRQ_PRIO        (0x06<<4)
+#define RT_MASK_IRQ_PRIO        (0x06<<4) // ISR's with a logical prio higher than this may NOT use kernel functionality!
 #define RT_IDLE_TASK_STACK_SIZE (512)
 #define RT_PRIO_LEVELS          (4)
 
 #define RT_FOREVER_TICK         (0xFFFFFFFF)
- 
-enum {
-  UNINITIALIZED = 'U',
-  READY         = 'R',
-  EXECUTING     = 'X',
-  DELAYED       = 'D',
-  BLOCKED       = 'B'
-};
 
 enum {
   RT_NOK = 0,
@@ -54,7 +46,6 @@ typedef struct {
   const char *task_name;
   uint32_t priority;
   uint32_t base_prio;
-  volatile char state;
   uint32_t stack_size;
   uint32_t delay_woken_tick;
   struct item list_item;

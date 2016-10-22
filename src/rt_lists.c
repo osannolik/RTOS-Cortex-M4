@@ -7,10 +7,13 @@
 
 #include "rt_lists.h"
 
+
 static volatile list_sorted_t delayed[RT_PRIO_LEVELS];
 volatile list_sorted_t ready[RT_PRIO_LEVELS];
 
 static void update_next_wakeup(void);
+static list_item_t *list_sorted_next_item(list_item_t *item);
+static list_item_t *list_sorted_get_iter_item(list_sorted_t *list);
 
 static void update_next_wakeup(void)
 {
@@ -32,7 +35,42 @@ static void update_next_wakeup(void)
   if (wake_up_task != NULL) {
     next_wakeup_task = wake_up_task;
     next_wakeup_tick = minimum_wake_up_tick;
+  } else {
+    next_wakeup_tick = RT_FOREVER_TICK;
   }
+}
+
+static list_item_t *list_sorted_next_item(list_item_t *item)
+{
+  list_item_t *next_item = item->next;
+  // Will get the next item but exclude the end item
+  if (next_item == &(((list_sorted_t *) item->list)->end))
+    return next_item->next;
+  else
+    return next_item;
+}
+
+static list_item_t *list_sorted_get_iter_item(list_sorted_t *list)
+{
+  list_item_t *iter_item = NULL;
+
+  if (list->len > 0) {
+    iter_item = list->iterator;
+    list->iterator = list_sorted_next_item(iter_item);
+  }
+
+  return iter_item;
+}
+
+void list_sorted_init(list_sorted_t *list)
+{
+  list->len = 0;
+  list->end.value = LIST_END_VALUE;
+  list->end.list = list;
+  list->end.prev = &(list->end);
+  list->end.next = &(list->end);
+  list->end.reference = NULL;
+  list->iterator = NULL;
 }
 
 void rt_lists_ready_init(void)
@@ -61,15 +99,11 @@ void rt_list_task_ready(rt_task_t const task)
 
 void rt_list_task_ready_next(rt_task_t const task)
 {
-  rt_enter_critical();
-
   uint32_t task_prio = task->priority;
   list_item_t *list_item = &(task->list_item);
 
   list_item->value = task_prio;
   list_sorted_iter_insert((list_sorted_t *) &(ready[task_prio]), list_item);
-
-  rt_exit_critical();
 }
 
 void rt_list_task_delayed(rt_task_t const task, const uint32_t wake_up_tick)
@@ -96,39 +130,6 @@ void rt_list_task_undelayed(rt_task_t const task)
   // NOTE: Does not set task as Ready!
   list_sorted_remove(&(task->list_item));
   update_next_wakeup();
-}
-
-void list_sorted_init(list_sorted_t *list)
-{
-  list->len = 0;
-  list->end.value = LIST_END_VALUE;
-  list->end.list = list;
-  list->end.prev = &(list->end);
-  list->end.next = &(list->end);
-  list->end.reference = NULL;
-  list->iterator = NULL;
-}
-
-list_item_t *list_sorted_next_item(list_item_t *item)
-{
-  list_item_t *next_item = item->next;
-  // Will get the next item but exclude the end item
-  if (next_item == &(((list_sorted_t *) item->list)->end))
-    return next_item->next;
-  else
-    return next_item;
-}
-
-list_item_t *list_sorted_get_iter_item(list_sorted_t *list)
-{
-  list_item_t *iter_item = NULL;
-
-  if (list->len > 0) {
-    iter_item = list->iterator;
-    list->iterator = list_sorted_next_item(iter_item);
-  }
-
-  return iter_item;
 }
 
 void *list_sorted_get_iter_ref(list_sorted_t *list)
@@ -170,7 +171,7 @@ uint32_t list_sorted_insert(list_sorted_t *list, list_item_t *item)
 uint32_t list_sorted_iter_insert(list_sorted_t *list, list_item_t *item)
 {
   // Insert the item to where the iterator points
-  // NOTE: It is the user's responsibility to ensure that the position is correct (i.e. sorted)
+  // NOTE: It is the caller's responsibility to ensure that the position is correct (i.e. sorted)
   list_item_t *insert_at = list->iterator;
 
   if (list->len == 0) {

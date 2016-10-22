@@ -110,8 +110,6 @@ uint32_t rt_create_task(rt_task_t const task, void * const task_parameters)
 {
   uint32_t prio = task->priority;
 
-  task->state = UNINITIALIZED;
-
   if (prio >= RT_PRIO_LEVELS) {
     task->priority = RT_PRIO_LEVELS - 1;
     task->base_prio = RT_PRIO_LEVELS - 1;
@@ -122,7 +120,6 @@ uint32_t rt_create_task(rt_task_t const task, void * const task_parameters)
   if (task->sp == NULL)
     return RT_NOK;
 
-  task->state = READY;
   task->list_item.reference = (void *) task;
   task->blocked_list_item.reference = (void *) task;
 

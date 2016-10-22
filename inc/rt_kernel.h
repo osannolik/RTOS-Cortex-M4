@@ -18,12 +18,8 @@
 #define rt_systick              SysTick_Handler
 #define rt_switch_context       PendSV_Handler
 #define rt_syscall              SVC_Handler
-//#define rt_enter_critical       rt_mask_irq
-//#define rt_exit_critical        rt_unmask_irq
 
-
-
-#define TCB_INIT(sp, fcn, name, prio, stack_size) {sp, fcn, name, prio, prio, UNINITIALIZED, stack_size, 0, LIST_ITEM_INIT, LIST_ITEM_INIT}
+#define TCB_INIT(sp, fcn, name, prio, stack_size) {sp, fcn, name, prio, prio, stack_size, 0, LIST_ITEM_INIT, LIST_ITEM_INIT}
 
 #define DEFINE_TASK(fcn, handle, name, prio, stack_size) \
   void fcn(void *p);\

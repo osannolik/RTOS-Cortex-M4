@@ -16,11 +16,17 @@
 
 typedef struct {
   volatile uint32_t counter;
-  volatile list_sorted_t blocked;
+  list_sorted_t blocked;
 } rt_sem_t;
 
 void rt_sem_init(rt_sem_t *sem, uint32_t count);
+uint32_t rt_sem_take_from_isr(rt_sem_t *sem);
+uint32_t rt_sem_give_from_isr(rt_sem_t *sem);
 uint32_t rt_sem_take(rt_sem_t *sem, const uint32_t ticks_timeout);
-uint32_t rt_sem_give(rt_sem_t *sem);
+
+ALWAYS_INLINE static uint32_t rt_sem_give(rt_sem_t *sem)
+{
+  return rt_sem_give_from_isr(sem);
+}
 
 #endif /* RT_SEM_H_ */

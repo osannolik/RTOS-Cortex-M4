@@ -3,6 +3,7 @@
 
 #include "rt_kernel.h"
 #include "rt_sem.h"
+#include "rt_queue.h"
 
 static void SystemClock_Config(void);
 static void Error_Handler(void);
@@ -12,11 +13,23 @@ static void Error_Handler(void);
 
 #define TASK_STACK_SIZE 512  
 
-DEFINE_TASK(task_1_fcn, task_1, "T1", 3, TASK_STACK_SIZE);
-DEFINE_TASK(task_2_fcn, task_2, "T2", 2, TASK_STACK_SIZE);
-DEFINE_TASK(task_3_fcn, task_3, "T3", 2, TASK_STACK_SIZE);
+DEFINE_TASK(task_1_fcn, task_1, "T1", 2, TASK_STACK_SIZE);
+DEFINE_TASK(task_2_fcn, task_2, "T2", 1, TASK_STACK_SIZE);
+DEFINE_TASK(task_3_fcn, task_3, "T3", 3, TASK_STACK_SIZE);
 
 rt_sem_t semaphore;
+
+rt_queue_t queue;
+
+#define N_ITEMS (10)
+
+uint8_t my_item = 0;
+
+uint8_t qBuffer[sizeof(my_item)*N_ITEMS];
+
+static TIM_HandleTypeDef handler_timer;
+
+void init_timer();
 
 int main(void)
 {
@@ -29,14 +42,16 @@ int main(void)
 
   rt_init();
 
-  uint8_t p1 = 0x22;
-  uint8_t p2 = 0x33;
+  rt_create_task(&task_1, NULL);
+  rt_create_task(&task_2, NULL);
+  rt_create_task(&task_3, NULL);
 
-  rt_create_task(&task_1, (void *) &p1);
-  rt_create_task(&task_2, (void *) &p2);
-  rt_create_task(&task_3, (void *) &p2);
+  rt_sem_init(&semaphore, 0);
 
-  rt_sem_init(&semaphore, 1);
+  rt_queue_init(&queue, qBuffer, sizeof(my_item), N_ITEMS);
+
+  init_timer();
+  HAL_TIM_Base_Start_IT(&handler_timer);
 
   HAL_InitTick(TICK_INT_PRIORITY);
   RT_SYSTICK_ENABLE;
@@ -50,20 +65,25 @@ int main(void)
 void task_1_fcn(void *p)
 {
   uint32_t task_cnt = 0;
-  uint8_t timed_out = 0;
+  uint8_t sem_taken = 0;
+  uint8_t item_pushed = 0;
 
   while (1) {
 
     DBG_PAD1_RESET;
 
-    if (rt_sem_take(&semaphore, 10) == RT_NOK)
-      timed_out = 1;
-    else
-      timed_out = 0;
+    if (rt_sem_take(&semaphore, 10) == RT_OK) {
 
-    DBG_PAD1_SET;
+      if (rt_queue_push(&queue, &my_item, 100) == RT_OK)
+        item_pushed = 1;
+      else
+        item_pushed = 0;
 
-    for (task_cnt=0; task_cnt<5000; task_cnt++);
+      my_item++;
+      DBG_PAD1_SET;
+      for (task_cnt=0; task_cnt<5000; task_cnt++);
+
+    }
 
   }
 }
@@ -79,10 +99,10 @@ void task_2_fcn(void *p)
 
     rt_periodic_delay(5);
 
-    if (rt_sem_give(&semaphore) == RT_OK)
-      task_unblocked = 1;
-    else
-      task_unblocked = 0;
+    // if (rt_sem_give(&semaphore) == RT_OK)
+    //   task_unblocked = 1;
+    // else
+    //   task_unblocked = 0;
 
     DBG_PAD2_SET;
 
@@ -125,6 +145,8 @@ void task_2_fcn(void *p)
 //   }
 // }
 
+uint8_t my_item_pulled = 0;
+
 void task_3_fcn(void *p)
 {
   uint32_t task_cnt = 0;
@@ -133,14 +155,56 @@ void task_3_fcn(void *p)
 
     DBG_PAD3_RESET;
 
-    rt_periodic_delay(50);
+    //rt_periodic_delay(50);
 
-    DBG_PAD3_SET;
-
-    for (task_cnt=0; task_cnt<10000; task_cnt++);
-
+    if (rt_queue_pull(&queue, &my_item_pulled, 100) == RT_OK) {
+      DBG_PAD3_SET;
+      for (task_cnt=0; task_cnt<10000; task_cnt++);
+    }
   }
 }
+
+
+void init_timer()
+{
+  TIM_ClockConfigTypeDef sClockSourceConfig;
+
+  __TIM3_CLK_ENABLE();
+
+  handler_timer.Channel = HAL_TIM_ACTIVE_CHANNEL_1;
+  handler_timer.Instance = TIM3;
+  handler_timer.Init.CounterMode = TIM_COUNTERMODE_UP;
+  handler_timer.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  handler_timer.Init.Prescaler = 4*64-1;
+  handler_timer.Init.Period = 2625;
+  HAL_TIM_Base_Init(&handler_timer);
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  sClockSourceConfig.ClockPrescaler = TIM_CLOCKPRESCALER_DIV8;
+  HAL_TIM_ConfigClockSource(&handler_timer, &sClockSourceConfig);
+
+  __HAL_TIM_SET_COUNTER(&handler_timer, 0);
+
+  HAL_NVIC_SetPriority(TIM3_IRQn, 10, 0);
+  HAL_NVIC_EnableIRQ(TIM3_IRQn);
+}
+
+void TIM3_IRQHandler()
+{
+  if (__HAL_TIM_GET_ITSTATUS(&handler_timer, TIM_IT_UPDATE) != RESET) {
+      __HAL_TIM_CLEAR_FLAG(&handler_timer, TIM_FLAG_UPDATE);
+
+      DBG_PAD5_TOGGLE;
+
+      uint32_t task_unblocked = rt_sem_give_from_isr(&semaphore);
+
+      if (task_unblocked != RT_NOK)
+        rt_pend_yield();
+      
+  }
+}
+
+
 
 /**
   * @brief  System Clock Configuration
