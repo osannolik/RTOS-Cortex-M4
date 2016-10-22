@@ -94,3 +94,16 @@ uint32_t rt_sem_take(rt_sem_t *sem, const uint32_t ticks_timeout)
   return sem_taken;
 }
 
+uint32_t rt_sem_give(rt_sem_t *sem)
+{
+  rt_enter_critical();
+
+  uint32_t higher_prio_task_unblocked = rt_sem_give_from_isr(sem);
+
+  if (higher_prio_task_unblocked != RT_NOK)
+    rt_pend_yield();
+
+  rt_exit_critical();
+
+  return higher_prio_task_unblocked;
+}

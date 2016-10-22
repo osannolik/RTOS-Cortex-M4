@@ -16,8 +16,9 @@ static void Error_Handler(void);
 DEFINE_TASK(task_1_fcn, task_1, "T1", 2, TASK_STACK_SIZE);
 DEFINE_TASK(task_2_fcn, task_2, "T2", 1, TASK_STACK_SIZE);
 DEFINE_TASK(task_3_fcn, task_3, "T3", 3, TASK_STACK_SIZE);
+DEFINE_TASK(task_4_fcn, task_4, "T4", 3, TASK_STACK_SIZE);
 
-rt_sem_t semaphore;
+rt_sem_t semaphore, semaphore_2;
 
 rt_queue_t queue;
 
@@ -45,8 +46,10 @@ int main(void)
   rt_create_task(&task_1, NULL);
   rt_create_task(&task_2, NULL);
   rt_create_task(&task_3, NULL);
+  rt_create_task(&task_4, NULL);
 
   rt_sem_init(&semaphore, 0);
+  rt_sem_init(&semaphore_2, 0);
 
   rt_queue_init(&queue, qBuffer, sizeof(my_item), N_ITEMS);
 
@@ -160,10 +163,28 @@ void task_3_fcn(void *p)
     if (rt_queue_pull(&queue, &my_item_pulled, 100) == RT_OK) {
       DBG_PAD3_SET;
       for (task_cnt=0; task_cnt<10000; task_cnt++);
+
+      rt_sem_give(&semaphore_2);
     }
   }
 }
 
+void task_4_fcn(void *p)
+{
+  uint32_t task_cnt = 0;
+
+  while (1) {
+
+    DBG_PAD1_RESET;
+
+    //rt_periodic_delay(50);
+
+    if (rt_sem_take(&semaphore_2, 100) == RT_OK) {
+      DBG_PAD1_SET;
+      for (task_cnt=0; task_cnt<1000; task_cnt++);
+    }
+  }
+}
 
 void init_timer()
 {
